@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
-import * as XLSX from 'xlsx';
 
 let cachedRows: any[] | null = null;
 let cachedHeaders: string[] = [];
@@ -136,73 +135,130 @@ function normalizeRegion(val: string): string {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',') {
+      if (inQuotes) {
+        cell += char;
+      } else {
+        result.push(cell);
+        cell = '';
+      }
+    } else {
+      cell += char;
+    }
+  }
+  result.push(cell);
+  return result;
+}
+
+function parseCSV(content: string) {
+  const lines: string[] = [];
+  let currentLine = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    const nextChar = content[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentLine += '"';
+        i++; // Skip next quote
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === '\n' || char === '\r') {
+      if (inQuotes) {
+        currentLine += char;
+      } else {
+        if (char === '\r' && nextChar === '\n') {
+          i++; // Skip \n
+        }
+        lines.push(currentLine);
+        currentLine = '';
+      }
+    } else {
+      currentLine += char;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  // Parse header
+  const headers = parseCSVLine(lines[0]);
+  const rows: any[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCSVLine(lines[i]);
+    if (cells.length === 0 || !cells[2]) continue; // Skip empty email rows (index 2 is email)
+    
+    const rowObj: any = {};
+    headers.forEach((header, idx) => {
+      rowObj[header] = cells[idx] || '';
+    });
+    rows.push(rowObj);
+  }
+
+  return { headers, rows };
+}
+
 function loadExcelData() {
   if (cachedRows) return;
 
-  const jsonPath = path.join(process.cwd(), 'public', 'startuptn-startups.json');
-  if (fs.existsSync(jsonPath)) {
-    const raw = fs.readFileSync(jsonPath, 'utf8');
-    const data = JSON.parse(raw);
-    cachedHeaders = data.headers || [];
-    cachedRows = data.leads || [];
-  } else {
-    // Fallback to Excel parsing if JSON cache doesn't exist
-    const filePath = path.join(process.cwd(), 'public', 'startuptn-startups.xlsx');
-    if (!fs.existsSync(filePath)) {
-      throw new Error('Excel file startuptn-startups.xlsx not found in public folder.');
-    }
-
-    const fileBuffer = fs.readFileSync(filePath);
-    const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    
-    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-    if (json.length <= 1) {
-      throw new Error('Excel file has no data.');
-    }
-
-    const rawHeaders = json[0].map(h => String(h || '').trim());
-    cachedHeaders = rawHeaders;
-
-    const lowercaseHeaders = rawHeaders.map(h => h.toLowerCase());
-    const emailIdx = lowercaseHeaders.findIndex(h => h.includes('email') || h.includes('decrypted email'));
-    const nameIdx = lowercaseHeaders.findIndex(h => h.includes('name') || h.includes('startup') || h.includes('company') || h.includes('startup name'));
-    const roleIdx = lowercaseHeaders.findIndex(h => h.includes('role') || h.includes('title') || h.includes('job'));
-
-    if (emailIdx === -1) {
-      throw new Error('Excel sheet must contain an email address column (e.g. Decrypted Email).');
-    }
-
-    const parsed: any[] = [];
-    for (let i = 1; i < json.length; i++) {
-      const row = json[i].map(val => String(val ?? '').trim());
-      if (row.length === 0 || !row[emailIdx]) continue;
-
-      const email = row[emailIdx];
-      const name = nameIdx !== -1 && row[nameIdx] ? row[nameIdx] : 'Unknown';
-      const role = roleIdx !== -1 && row[roleIdx] ? row[roleIdx] : 'Founder';
-
-      const customFields: any = {};
-      rawHeaders.forEach((header, idx) => {
-        let cellVal = row[idx] || '';
-        if (cellVal.toLowerCase() === 'false') {
-          cellVal = '';
-        }
-        customFields[header] = cellVal;
-      });
-
-      parsed.push({
-        _id: `lead-${i}`,
-        name,
-        email,
-        role,
-        status: 'pending',
-        customFields,
-      });
-    }
-    cachedRows = parsed;
+  const csvPath = path.join(process.cwd(), 'public', 'startuptn-startups.csv');
+  if (!fs.existsSync(csvPath)) {
+    throw new Error('CSV file startuptn-startups.csv not found in public folder.');
   }
+
+  const raw = fs.readFileSync(csvPath, 'utf8');
+  const { headers, rows } = parseCSV(raw);
+  cachedHeaders = headers;
+
+  const parsed: any[] = [];
+  rows.forEach((row, i) => {
+    const email = row.email || '';
+    const name = row.name || '';
+    const role = row.role || 'Founder';
+
+    // Construct customFields
+    const customFields: any = {};
+    headers.forEach(header => {
+      let cellVal = row[header] || '';
+      if (cellVal.toLowerCase() === 'false') {
+        cellVal = '';
+      }
+      customFields[header] = cellVal;
+    });
+
+    parsed.push({
+      _id: `lead-${i + 1}`,
+      name,
+      email,
+      role,
+      status: 'pending',
+      customFields,
+    });
+  });
+
+  cachedRows = parsed;
 
   // Populate dynamic filters from cachedRows and normalize values
   const rolesSet = new Set<string>();
@@ -221,7 +277,7 @@ function loadExcelData() {
 
     // Dynamic Fallbacks to prevent 'Unknown' or 'false' names
     if (!c.name || c.name.toLowerCase() === 'unknown' || c.name === '' || c.name.toLowerCase() === 'false') {
-      const brandKey = Object.keys(c.customFields).find(k => k.toLowerCase().includes('brand name') || k.toLowerCase().includes('startup name') || k.toLowerCase().includes('startup'));
+      const brandKey = Object.keys(c.customFields).find(k => k.toLowerCase().includes('brand name') || k.toLowerCase().includes('startup name') || k.toLowerCase().includes('startup') || k.toLowerCase().includes('name'));
       if (brandKey && c.customFields[brandKey] && String(c.customFields[brandKey]).toLowerCase() !== 'false') {
         c.name = c.customFields[brandKey];
       } else if (c.email) {
@@ -235,7 +291,7 @@ function loadExcelData() {
     const hasDigits = /\d/.test(c.name);
     const isEmailPrefix = c.email && c.name.toLowerCase() === c.email.split('@')[0].toLowerCase();
     if (hasDigits || isEmailPrefix) {
-      const brandKey = Object.keys(c.customFields).find(k => k.toLowerCase().includes('brand name') || k.toLowerCase().includes('startup name') || k.toLowerCase().includes('startup') || k.toLowerCase().includes('company'));
+      const brandKey = Object.keys(c.customFields).find(k => k.toLowerCase().includes('brand name') || k.toLowerCase().includes('startup name') || k.toLowerCase().includes('startup') || k.toLowerCase().includes('name') || k.toLowerCase().includes('company'));
       if (brandKey && c.customFields[brandKey] && String(c.customFields[brandKey]).toLowerCase() !== 'false' && String(c.customFields[brandKey]).trim() !== '') {
         const brandVal = String(c.customFields[brandKey]).trim();
         if (/\d/.test(brandVal) || brandVal.toLowerCase() === 'false') {
@@ -244,7 +300,7 @@ function loadExcelData() {
           c.name = brandVal;
         }
       } else {
-        c.name = ''; // Clear so template interpolator defaults to 'your company'
+        c.name = ''; // Clear so template interpolator defaults to 'Your Company'
       }
     }
 
@@ -259,9 +315,9 @@ function loadExcelData() {
     }
 
     const sectorKey = Object.keys(c.customFields).find(k => k.toLowerCase() === 'sector');
-    const regionKey = Object.keys(c.customFields).find(k => k.toLowerCase() === 'region');
+    const regionKey = Object.keys(c.customFields).find(k => k.toLowerCase() === 'region' || k.toLowerCase() === 'state');
     const districtKey = Object.keys(c.customFields).find(k => k.toLowerCase() === 'district');
-    const dpiitKey = Object.keys(c.customFields).find(k => k.toLowerCase() === 'dpiit certified');
+    const dpiitKey = Object.keys(c.customFields).find(k => k.toLowerCase() === 'dpiit certified' || k.toLowerCase() === 'dpiitcertified');
 
     // Run normalizations
     if (districtKey) {
@@ -327,7 +383,7 @@ export async function GET(req: NextRequest) {
     }
     if (region) {
       filtered = filtered.filter(c => {
-        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'region');
+        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'region' || k.toLowerCase() === 'state');
         return key && c.customFields[key] === region;
       });
     }
@@ -339,7 +395,7 @@ export async function GET(req: NextRequest) {
     }
     if (dpiit) {
       filtered = filtered.filter(c => {
-        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'dpiit certified');
+        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'dpiit certified' || k.toLowerCase() === 'dpiitcertified');
         return key && c.customFields[key] === dpiit;
       });
     }
@@ -425,7 +481,7 @@ export async function POST(req: NextRequest) {
     }
     if (region) {
       filtered = filtered.filter(c => {
-        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'region');
+        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'region' || k.toLowerCase() === 'state');
         return key && c.customFields[key] === region;
       });
     }
@@ -437,7 +493,7 @@ export async function POST(req: NextRequest) {
     }
     if (dpiit) {
       filtered = filtered.filter(c => {
-        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'dpiit certified');
+        const key = Object.keys(c.customFields).find(k => k.toLowerCase() === 'dpiit certified' || k.toLowerCase() === 'dpiitcertified');
         return key && c.customFields[key] === dpiit;
       });
     }
