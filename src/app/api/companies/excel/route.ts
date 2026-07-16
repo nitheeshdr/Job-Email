@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
+import * as XLSX from 'xlsx';
 
 let cachedRows: any[] | null = null;
 let cachedHeaders: string[] = [];
@@ -135,113 +136,64 @@ function normalizeRegion(val: string): string {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let cell = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    const nextChar = line[i + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        cell += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',') {
-      if (inQuotes) {
-        cell += char;
-      } else {
-        result.push(cell);
-        cell = '';
-      }
-    } else {
-      cell += char;
-    }
-  }
-  result.push(cell);
-  return result;
-}
-
-function parseCSV(content: string) {
-  const lines: string[] = [];
-  let currentLine = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
-    const nextChar = content[i + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        currentLine += '"';
-        i++; // Skip next quote
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === '\n' || char === '\r') {
-      if (inQuotes) {
-        currentLine += char;
-      } else {
-        if (char === '\r' && nextChar === '\n') {
-          i++; // Skip \n
-        }
-        lines.push(currentLine);
-        currentLine = '';
-      }
-    } else {
-      currentLine += char;
-    }
-  }
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  if (lines.length === 0) return { headers: [], rows: [] };
-
-  // Parse header
-  const headers = parseCSVLine(lines[0]);
-  const rows: any[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const cells = parseCSVLine(lines[i]);
-    if (cells.length === 0 || !cells[2]) continue; // Skip empty email rows (index 2 is email)
-    
-    const rowObj: any = {};
-    headers.forEach((header, idx) => {
-      rowObj[header] = cells[idx] || '';
-    });
-    rows.push(rowObj);
-  }
-
-  return { headers, rows };
-}
-
 function loadExcelData() {
   if (cachedRows) return;
 
-  const csvPath = path.join(process.cwd(), 'public', 'startuptn-startups.csv');
-  if (!fs.existsSync(csvPath)) {
-    throw new Error('CSV file startuptn-startups.csv not found in public folder.');
+  const xlsxPath = path.join(process.cwd(), 'public', 'startuptn-startups.xlsx');
+  if (!fs.existsSync(xlsxPath)) {
+    throw new Error('Excel file startuptn-startups.xlsx not found in public folder.');
   }
 
-  const raw = fs.readFileSync(csvPath, 'utf8');
-  const { headers, rows } = parseCSV(raw);
-  cachedHeaders = headers;
+  const fileBuffer = fs.readFileSync(xlsxPath);
+  const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  
+  const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+  if (json.length <= 1) {
+    throw new Error('Excel file has no data.');
+  }
+
+  const rawHeaders = json[0].map(h => String(h || '').trim());
+  cachedHeaders = [
+    'userId',
+    'name',
+    'email',
+    'phone',
+    'role',
+    'sector',
+    'district',
+    'state',
+    'dpiitCertified',
+    'website'
+  ];
+
+  const targetIndices = cachedHeaders.map(col => {
+    return rawHeaders.findIndex(h => h.toLowerCase() === col.toLowerCase());
+  });
 
   const parsed: any[] = [];
-  rows.forEach((row, i) => {
-    const email = row.email || '';
-    const name = row.name || '';
-    const role = row.role || 'Founder';
+  for (let i = 1; i < json.length; i++) {
+    const row = json[i].map(val => String(val ?? '').trim());
+    
+    // Skip if no email
+    const emailIdx = targetIndices[2]; // 'email' index
+    if (emailIdx === -1 || !row[emailIdx]) continue;
+
+    const email = row[emailIdx];
+    const name = targetIndices[1] !== -1 && row[targetIndices[1]] ? row[targetIndices[1]] : '';
+    const role = targetIndices[4] !== -1 && row[targetIndices[4]] ? row[targetIndices[4]] : 'Founder';
+
+    // Exclude student leads
+    if (role.toLowerCase().includes('student')) {
+      continue;
+    }
 
     // Construct customFields
     const customFields: any = {};
-    headers.forEach(header => {
-      let cellVal = row[header] || '';
+    cachedHeaders.forEach((header, idx) => {
+      const srcIdx = targetIndices[idx];
+      let cellVal = srcIdx !== -1 && row[srcIdx] ? row[srcIdx] : '';
       if (cellVal.toLowerCase() === 'false') {
         cellVal = '';
       }
@@ -249,15 +201,14 @@ function loadExcelData() {
     });
 
     parsed.push({
-      _id: `lead-${i + 1}`,
+      _id: `lead-${i}`,
       name,
       email,
       role,
       status: 'pending',
       customFields,
     });
-  });
-
+  }
   cachedRows = parsed;
 
   // Populate dynamic filters from cachedRows and normalize values
