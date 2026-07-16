@@ -41,6 +41,5 @@ yarn-error.log*
 next-env.d.ts
 
 # large assets
-/public/*.xlsx
 /public/*.json
 *.pdf
