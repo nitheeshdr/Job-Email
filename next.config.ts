@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
   },
   outputFileTracingIncludes: {
     '/api/companies/excel': [
+      './public/startuptn-startups.csv',
       './public/startuptn-startups.xlsx'
     ],
   },
