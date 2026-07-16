@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+  outputFileTracingIncludes: {
+    '/api/companies/excel': [
+      './public/startuptn-startups.xlsx'
+    ],
+  },
 };
 
 export default nextConfig;

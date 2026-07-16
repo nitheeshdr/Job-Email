@@ -184,11 +184,6 @@ function loadExcelData() {
     const name = targetIndices[1] !== -1 && row[targetIndices[1]] ? row[targetIndices[1]] : '';
     const role = targetIndices[4] !== -1 && row[targetIndices[4]] ? row[targetIndices[4]] : 'Founder';
 
-    // Exclude student leads
-    if (role.toLowerCase().includes('student')) {
-      continue;
-    }
-
     // Construct customFields
     const customFields: any = {};
     cachedHeaders.forEach((header, idx) => {
