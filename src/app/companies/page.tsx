@@ -106,6 +106,14 @@ export default function CompaniesPage() {
       }
 
       const data = await res.json();
+
+      // Auto-heal out of bounds page index
+      if (data.total > 0 && (page - 1) * limit >= data.total && page > 1) {
+        setPage(1);
+        localStorage.setItem('jobmail_page', '1');
+        return;
+      }
+
       setTotalLeads(data.total);
       setSheetHeaders(data.headers || []);
       
@@ -157,6 +165,26 @@ export default function CompaniesPage() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleClearAllFilters = () => {
+    setSearch('');
+    setRoleFilter('');
+    setSectorFilter('');
+    setRegionFilter('');
+    setDistrictFilter('');
+    setDpiitFilter('');
+    setStatusFilter('');
+    setPage(1);
+    
+    localStorage.removeItem('jobmail_search');
+    localStorage.removeItem('jobmail_role');
+    localStorage.removeItem('jobmail_sector');
+    localStorage.removeItem('jobmail_region');
+    localStorage.removeItem('jobmail_district');
+    localStorage.removeItem('jobmail_dpiit');
+    localStorage.removeItem('jobmail_status');
+    localStorage.setItem('jobmail_page', '1');
   };
 
   // Toggle selection for all visible rows on current page
@@ -384,9 +412,18 @@ export default function CompaniesPage() {
               <p className="text-sm">Fetching and filtering Excel sheets...</p>
             </div>
           ) : companies.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-[#8f8f8f]">
-              <Database className="h-10 w-10 text-[#c9c9c9] mb-2" />
-              <p className="text-sm">No spreadsheet matching leads found.</p>
+            <div className="flex flex-col items-center justify-center py-16 text-[#8f8f8f] space-y-4">
+              <Database className="h-10 w-10 text-[#c9c9c9]" />
+              <div className="text-center space-y-1">
+                <p className="text-sm font-semibold text-[#171717]">No matching leads found</p>
+                <p className="text-xs text-[#8f8f8f] max-w-sm px-4">Your current filters might be too restrictive, your search query did not yield results, or your page index is out of bounds.</p>
+              </div>
+              <button
+                onClick={handleClearAllFilters}
+                className="h-9 px-4 rounded-[6px] bg-[#171717] hover:bg-[#4d4d4d] text-white text-xs font-semibold transition-all active:scale-95"
+              >
+                Reset All Filters
+              </button>
             </div>
           ) : (
             <table className="w-full border-collapse text-left text-xs text-[#171717] table-auto">
