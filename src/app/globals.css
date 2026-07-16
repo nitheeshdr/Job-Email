@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  
+  --color-geist-bg-100: #ffffff;
+  --color-geist-bg-200: #fafafa;
+  
+  --color-geist-gray-100: #f2f2f2;
+  --color-geist-gray-200: #ebebeb;
+  --color-geist-gray-300: #e6e6e6;
+  --color-geist-gray-400: #eaeaea;
+  --color-geist-gray-500: #c9c9c9;
+  --color-geist-gray-600: #a8a8a8;
+  --color-geist-gray-700: #8f8f8f;
+  --color-geist-gray-800: #7d7d7d;
+  --color-geist-gray-900: #4d4d4d;
+  --color-geist-gray-1000: #171717;
+
+  --color-geist-blue-100: #f0f7ff;
+  --color-geist-blue-200: #e9f4ff;
+  --color-geist-blue-300: #dfefff;
+  --color-geist-blue-400: #cae7ff;
+  --color-geist-blue-500: #94ccff;
+  --color-geist-blue-600: #48aeff;
+  --color-geist-blue-700: #006bff;
+  --color-geist-blue-800: #0059ec;
+  --color-geist-blue-900: #005ff2;
+  --color-geist-blue-1000: #002359;
+
+  --color-geist-red-100: #ffeeef;
+  --color-geist-red-200: #ffe8ea;
+  --color-geist-red-300: #ffe3e4;
+  --color-geist-red-400: #ffd7d6;
+  --color-geist-red-500: #ffb1b3;
+  --color-geist-red-600: #ff676d;
+  --color-geist-red-700: #fc0035;
+  --color-geist-red-800: #ea001d;
+  --color-geist-red-900: #d8001b;
+  --color-geist-red-1000: #47000c;
+
+  --color-geist-amber-100: #fff6de;
+  --color-geist-amber-200: #fff4cf;
+  --color-geist-amber-300: #fff1c1;
+  --color-geist-amber-400: #ffdc73;
+  --color-geist-amber-500: #ffc543;
+  --color-geist-amber-600: #ffa600;
+  --color-geist-amber-700: #ffae00;
+  --color-geist-amber-800: #ff9300;
+  --color-geist-amber-900: #aa4d00;
+  --color-geist-amber-1000: #561900;
+
+  --color-geist-green-100: #ecfdec;
+  --color-geist-green-200: #e5fce7;
+  --color-geist-green-300: #d3fad1;
+  --color-geist-green-400: #b9f5bc;
+  --color-geist-green-500: #82eb8d;
+  --color-geist-green-600: #4ce15e;
+  --color-geist-green-700: #28a948;
+  --color-geist-green-800: #279141;
+  --color-geist-green-900: #107d32;
+  --color-geist-green-1000: #003a00;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #fafafa;
+}
+::-webkit-scrollbar-thumb {
+  background: #c9c9c9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.shadow-geist-raised {
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.04);
+}
+
+.shadow-geist-popover {
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02), 0 4px 8px -4px rgba(0, 0, 0, 0.04), 0 16px 24px -8px rgba(0, 0, 0, 0.06);
+}
+
+.shadow-geist-modal {
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.02), 0 8px 16px -4px rgba(0, 0, 0, 0.04), 0 24px 32px -8px rgba(0, 0, 0, 0.06);
+}
